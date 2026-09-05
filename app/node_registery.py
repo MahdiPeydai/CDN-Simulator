@@ -35,7 +35,7 @@ def register_client_nodes(clients: dict):
     client_1 = ClientNode(name="1")
 
     client_0.set_edge("B", 200)
-    client_0.set_edge("D", 160)
+    client_0.set_edge("D", 100)
     client_0.set_edge("E", 150)
 
     client_1.set_edge("C", 50)

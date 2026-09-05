@@ -1,8 +1,7 @@
 import asyncio
-from typing import Optional
+from typing import Optional, Any
 
-from app.helpers.dns_helpers import time_sleep_ms, sort_enable_by_duration_estimation, calculate_network_latency_by_km
-from app.main import SERVERS
+from app.helpers.cdn_helpers import time_sleep_ms, sort_enable_by_duration_estimation, calculate_network_latency_by_km
 
 
 class Node:
@@ -51,26 +50,29 @@ class ServerNode(Node):
     def healthy(self):
         return self._healthy
 
-    async def get_data(self, requester_node: Optional[str] = None) -> Optional[dict]:
+    async def get_data(self, data_key: str, requester_node: Optional[str] = None) -> Optional[dict]:
         await time_sleep_ms(self._process_latency)
-        if self._database:
-            return self._database
+        data = self._database.get(data_key, None)
+        if data:
+            return data
 
-        result = await self.get_from_other_nodes(requester_node)
+        result = await self.get_from_other_nodes(data_key, requester_node)
 
         if result is not None:
-            self._database = result
+            self._database[data_key] = result
         return result
 
-    async def get_from_other_nodes(self, requester_node: Optional[str] = None) -> Optional[dict]:
+    async def get_from_other_nodes(self, data_key: str, requester_node: Optional[str] = None) -> Optional[dict]:
+        from app.main import SERVERS
+
         edges = self.edges.copy()
         if requester_node:
             edges.pop(requester_node, None)
 
-        sorted_enable_servers = sort_enable_by_duration_estimation(edges)
+        sorted_enable_servers = sort_enable_by_duration_estimation(edges, SERVERS)
 
         tasks: dict[asyncio.Task, str] = {
-            asyncio.create_task(server[0].get_data(requester_node=self.name)): server[0].name
+            asyncio.create_task(server[0].get_data(data_key, requester_node=self.name)): server[0].name
             for server in sorted_enable_servers
         }
 
@@ -92,22 +94,32 @@ class ServerNode(Node):
 
         return None
 
-    async def invalidate_data(self, requester_node: Optional[str] = None):
-        self._database = {}
-        await self.push_data_invalidation(requester_node)
+    async def invalidate_data(self, data_key: str, requester_node: Optional[str] = None):
+        self._database.pop(data_key, None)
+        await self.push_data_invalidation(data_key, requester_node)
 
-    async def push_data_invalidation(self, requester_node: Optional[str] = None):
+    async def push_data_invalidation(self, data_key: str, requester_node: Optional[str] = None):
+        from app.main import SERVERS
+
         edges = self.edges.copy()
         if requester_node:
             edges.pop(requester_node, None)
 
         tasks = [
-            asyncio.create_task(SERVERS[node_name].invalidate_data(requester_node=self.name))
+            asyncio.create_task(SERVERS[node_name].invalidate_data(data_key, requester_node=self.name))
             for node_name in edges.keys()
         ]
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def update_data(self, data_key: str, data: Any | None = None):
+        try:
+            self._database[data_key] = data
+            await self.push_data_invalidation(data_key)
+            return data
+        except:
+            return None
 
     def add_failure(self):
         self._failure_count += 1
