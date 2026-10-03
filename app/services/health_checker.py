@@ -1,6 +1,6 @@
 import asyncio
 
-from app.node import ServerNode
+from app.domain.node import ServerNode
 
 
 class HealthChecker:
@@ -14,13 +14,14 @@ class HealthChecker:
             await self.check_all()
             await asyncio.sleep(self.interval)
 
+
     async def check_all(self):
-        await asyncio.gather(
-            *(self._check(server) for server in self.servers)
-        )
+        for server in self.servers:
+            self._check(server)
+
 
     @staticmethod
-    async def _check(server: ServerNode):
+    def _check(server: ServerNode):
         if server.healthy:
             server.mark_up()
         else:

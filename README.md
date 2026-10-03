@@ -9,7 +9,7 @@ A small FastAPI-based CDN simulator built as an interview assignment. It models 
 - **Cache invalidation**: writes are accepted by the selected edge and invalidation is propagated through the server graph.
 - **Failure handling**: failed requests increment a per-node failure counter and can temporarily remove a node from routing.
 - **Health checking**: a lightweight background health checker reconciles server routing state.
-- **Deterministic topology**: the server/client graph is defined in `app/node_registry.py`, making scenarios easy to inspect and test.
+- **Deterministic topology**: the server/client graph is defined in `app/topology.py`, making scenarios easy to inspect and test.
 
 ## Topology
 
@@ -90,7 +90,7 @@ Requires Python 3.11 or newer.
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:fastapi_app --reload
+uvicorn app.main:fastapi_app
 ```
 
 Then open the interactive API documentation at `http://localhost:8000/docs`.
@@ -112,23 +112,51 @@ The tests cover routing by proximity/latency, down/busy nodes, cache fills, inva
 
 ## Design choices and scope
 
-This is intentionally an **in-memory simulator**, not a production CDN. No external database, distributed cache, real DNS, or real network calls are required. Distances and latency are deterministic so the behavior can be exercised in automated tests.
+This is a simple **in-memory simulator** by design, not a production CDN. No external database, distributed cache, real DNS, or real network calls are required. Distances and latency are deterministic so the behavior can be exercised in automated tests.
 
 The server graph is small and currently has no arbitrary cyclic topology beyond bidirectional links. For a general graph, invalidation/fetch traversal should use a request-scoped `visited` set or request ID to guarantee cycle safety. Similarly, production systems would use persistent/distributed state, structured observability, explicit timeouts/circuit breakers, and a real health-probe mechanism.
 
-## Project structure
+## Project Structure
+
+The project is organized by responsibility to keep the CDN simulation logic separate from HTTP handling, domain models, and simulation utilities.
 
 ```text
 app/
-├── helpers/
-│   ├── cdn_helpers.py
-│   └── health_checker.py
+├── api/
+│   └── routes.py              # HTTP endpoints
+│
+├── domain/
+│   ├── cache.py               # In-memory cache
+│   └── node.py                # Server and client node models
+│
 ├── middlewares/
-│   └── cdn_simulator.py
-├── main.py
-├── node.py
-├── node_registry.py
-└── router.py
-tests/
-└── test_routes_with_cdn_scenarios.py
+│   └── cdn_simulator.py       # Client resolution and request simulation
+│
+├── services/
+│   ├── cdn_service.py         # Main CDN operation
+│   ├── content_fetcher.py     # Content lookup and graph traversal
+│   ├── health_checker.py      # Simulated server health checks
+│   ├── invalidation.py        # Content invalidation
+│   └── server_selector.py     # Server selection and ordering
+│
+├── simulation/
+│   └── latency.py             # Network latency simulation
+│
+├── topology.py                # Builds the simulated network topology
+└── main.py                    # Application setup
+```
+
+### Responsibilities
+
+* **API** handles HTTP requests and converts service results into HTTP responses.
+* **Middleware** resolves the client node and adds simulation-related response information.
+* **CDN Service** coordinates CDN operations such as fetching and updating data.
+* **Content Fetcher** handles content lookup and traverses the server graph when data is not available locally.
+* **Server Selector** selects and orders available servers based on simulated latency.
+* **Invalidation Service** removes stale content data from other servers after an update.
+* **Domain models** represent servers, clients, and their local caches.
+* **Simulation** contains latency-related simulation utilities.
+* **Topology** defines the predefined servers, clients, and network connections.
+* **Main** initializes the application and wires the components together.
+
 ```

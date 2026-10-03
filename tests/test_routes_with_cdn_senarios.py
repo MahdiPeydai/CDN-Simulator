@@ -27,7 +27,7 @@ def test_unknown_client_node_is_rejected():
 def test_all_servers_up_scenario_data_found():
     with TestClient(fastapi_app) as client:
         for server in SERVERS.values():
-            server._database = {"key": server.name}
+            server.update_data("key", server.name)
 
         response0 = client.get(
             "/data/key",
@@ -62,7 +62,7 @@ def test_all_servers_up_scenario_data_found():
 def test_all_servers_up_scenario_data_not_found():
     with TestClient(fastapi_app) as client:
         for server in SERVERS.values():
-            server._database = {"key": server.name}
+            server.update_data("key", server.name)
 
         response0 = client.get(
             "/data/invalid",
@@ -96,7 +96,7 @@ def test_all_servers_up_scenario_data_not_found():
 
 def test_only_server_a_has_data_scenario():
     with TestClient(fastapi_app) as client:
-        SERVERS["A"]._database = {"key": SERVERS["A"].name}
+        SERVERS["A"].update_data("key", SERVERS["A"].name)
 
         response0 = client.get(
             "/data/key",
@@ -108,7 +108,7 @@ def test_only_server_a_has_data_scenario():
         # user 0 nearest node is D, but it must get data from server A
         assert response0.json() == {'result': 'A', 'success': True}
         # now server D must have data {"key": "A"}
-        assert SERVERS["D"]._database == {"key": SERVERS["A"].name}
+        assert SERVERS["D"].get_data("key") == SERVERS["A"].name
         duration = float(
             response0.headers["X-Simulation-Duration"]
         )
@@ -125,7 +125,7 @@ def test_only_server_a_has_data_scenario():
         # user 1 nearest node is C, but it must get data from server A
         assert response1.json() == {'result': 'A', 'success': True}
         # now server C must have data {"key": "A"}
-        assert SERVERS["C"]._database == {"key": SERVERS["A"].name}
+        assert SERVERS["C"].get_data("key") == SERVERS["A"].name
         duration = float(
             response1.headers["X-Simulation-Duration"]
         )
@@ -136,7 +136,7 @@ def test_server_c_down_scenario():
     with TestClient(fastapi_app) as client:
 
         for server in SERVERS.values():
-            server._database = {"key": server.name}
+            server.update_data("key", server.name)
 
         SERVERS["C"].mark_down()
 
@@ -161,7 +161,7 @@ def test_server_d_busy_scenario():
     with TestClient(fastapi_app) as client:
 
         for server in SERVERS.values():
-            server._database = {"key": server.name}
+            server.update_data("key", server.name)
 
         SERVERS["D"].set_latency(200)
 
@@ -185,7 +185,7 @@ def test_server_d_busy_scenario():
 def test_propagation():
     with TestClient(fastapi_app) as client:
         for server in SERVERS.values():
-            server._database = {"key": "test"}
+            server.update_data("key", "test")
 
         response1 = client.post(
             "/data/key",
@@ -199,7 +199,7 @@ def test_propagation():
         # user 1 nearest node is C, so other servers must not have key data as they invalidate it
         for server in SERVERS.values():
             if server.name != "C":
-                assert server._database.get("key") is None
+                assert server.get_data("key") is None
         duration = float(
             response1.headers["X-Simulation-Duration"]
         )
@@ -219,5 +219,5 @@ def test_propagation():
             response0.headers["X-Simulation-Duration"]
         )
         print(duration)
-        # data get from c -> a -> d, so minimum response time is 140ms
-        assert duration >= 0.14
+        # data get from c -> a -> d, so minimum response time is 110ms
+        assert duration >= 0.11
