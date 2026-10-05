@@ -1,8 +1,7 @@
 import asyncio
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from app.domain.node import ServerNode
+from app.domain.node import ServerNode
 
 
 def sort_enabled_by_duration_estimation(edges: dict[str, float], servers: dict[str, ServerNode] | None = None) -> list[tuple[ServerNode, float]]:
